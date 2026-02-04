@@ -1,5 +1,5 @@
 ---
-mode: 'agent'
+agent: 'agent'
 description: 'Create ADD iteration plan draft for architecture design'
 ---
 

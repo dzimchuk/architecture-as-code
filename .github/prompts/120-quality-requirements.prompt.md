@@ -1,5 +1,5 @@
 ---
-mode: 'agent'
+agent: 'agent'
 description: 'Generate Quality Tree and Quality Scenarios for arc42 section 10'
 ---
 

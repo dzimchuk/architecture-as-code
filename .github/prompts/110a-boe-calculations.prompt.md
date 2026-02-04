@@ -1,5 +1,5 @@
 ---
-mode: 'agent'
+agent: 'agent'
 description: 'Perform back-of-the-envelope estimates for technical risks'
 ---
 

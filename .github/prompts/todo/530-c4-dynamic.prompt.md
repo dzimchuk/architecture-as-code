@@ -1,4 +1,4 @@
 ---
-mode: 'agent'
+agent: 'agent'
 description: ''
 ---

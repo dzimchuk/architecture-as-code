@@ -1,5 +1,5 @@
 ---
-mode: 'agent'
+agent: 'agent'
 description: 'Summarize ADRs into Solution Strategy (arc42 §5)'
 ---
 

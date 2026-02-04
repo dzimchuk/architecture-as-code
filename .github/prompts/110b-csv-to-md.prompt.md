@@ -1,5 +1,5 @@
 ---
-mode: 'agent'
+agent: 'agent'
 description: 'Convert CSV BOE calculation file to Markdown table'
 ---
 

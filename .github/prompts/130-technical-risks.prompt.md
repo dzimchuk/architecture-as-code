@@ -1,5 +1,5 @@
 ---
-mode: 'agent'
+agent: 'agent'
 description: 'Generate Technical Risks section in arc42 AsciiDoc format'
 ---
 

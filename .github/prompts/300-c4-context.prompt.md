@@ -1,5 +1,5 @@
 ---
-mode: 'agent'
+agent: 'agent'
 description: 'Add software systems and persons to the Structurizr model'
 ---
 

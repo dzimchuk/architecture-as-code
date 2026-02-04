@@ -1,5 +1,5 @@
 ---
-mode: 'agent'
+agent: 'agent'
 description: 'Extract parameters and assumptions for back-of-the-envelope estimation ADR'
 ---
 

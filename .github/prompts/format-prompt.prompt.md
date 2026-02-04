@@ -1,5 +1,5 @@
 ---
-mode: 'agent'
+agent: 'agent'
 description: 'Format a prompt into the standard meta-prompt structure'
 ---
 
@@ -23,7 +23,7 @@ All prompts must follow the **standard meta-prompt format**:
 - ALWAYS use YAML-like header:
     ```
     ---
-    mode: 'agent'
+    agent: 'agent'
     description: '<short purpose: imperative, action-oriented>'
     ---
     ```

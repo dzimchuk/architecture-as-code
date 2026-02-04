@@ -1,5 +1,5 @@
 ---
-mode: 'agent'
+agent: 'agent'
 description: 'Impact Assessment Rules for Emoji-Based Risk Marking'
 ---
 
