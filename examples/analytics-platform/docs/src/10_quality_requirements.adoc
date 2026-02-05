@@ -3,16 +3,103 @@ ifndef::imagesdir[:imagesdir: ../images]
 [[section-quality-scenarios]]
 == Quality Requirements
 
-- _See https://re-magazine.ireb.org/articles/discover-quality-requirements-with-the-mini-qaw[Mini-QAW] for a short and fun elicitation workshop for Agile teams and architects._
-
-
-
 === Quality Tree
 
-- _See an example quality tree in the https://docs.arc42.org/examples/quality-tpu-1/#101-quality-tree[arc42 documentation]._
+[options="header",cols="1,2,3,3,1"]
+|===
+|ID |Quality Attribute |Scenario |Fit Criteria |Priority
+
+|P-1 |Performance (Query Latency) |Dashboard report generation |Reports and charts delivered within 1.5 seconds for any parameter combination over ≤3 months |High
+|P-2 |Performance (Write Throughput) |Peak event ingestion |System sustains 5M write RPS during traffic spikes without data loss |High
+|S-1 |Scalability (Horizontal) |Ingestion capacity growth |System handles 100 billion events/day baseline, scaling to 146 billion by Year 5 |High
+|S-2 |Scalability (Storage) |Long-term data retention |System stores cumulative 99 TB of event data by Year 5 with forever retention |High
+|A-1 |Availability (Data Freshness) |Event processing latency |Events appear in statistics within 50-100 minutes of occurrence |Medium
+|A-2 |Availability (System Uptime) |Service availability |System maintains 99.9% uptime during business hours |High
+|D-1 |Durability (Data Retention) |Permanent event storage |Zero data loss for ingested events with forever retention policy |High
+|M-1 |Maintainability (Monitoring) |System observability |Detection of bottlenecks and anomalies within 2 minutes across distributed pipeline |Medium
+|U-1 |Usability (SDK Integration) |Client integration ease |Website owners integrate tracking SDK in <30 minutes with zero server-side changes |Medium
+|SE-1 |Security (Data Privacy) |GDPR/CCPA compliance |System supports consent management, data deletion requests within 30 days, and audit logging |High
+|===
 
 === Quality Scenarios
 
-- _See example quality scenarios in the
-https://docs.arc42.org/examples/quality-tpu-1/#102-quality-scenarios[arc42 documentation]._
+==== P-1
+[options="header",cols="2,2,2,2,2,2"]
+|===
+|Source |Stimulus |Environment |Artifact |Response |Response Measure
+
+|Analyst/Marketer |Requests dashboard with multi-dimensional segmentation (geolocation, traffic source, device, UTM tags) for 3-month period |Production system under normal load |Analytics UI + Query API |System executes query, aggregates data, and renders visualization |Response time ≤1.5 seconds for 95th percentile of queries
+|===
+
+==== P-2
+[options="header",cols="2,2,2,2,2,2"]
+|===
+|Source |Stimulus |Environment |Artifact |Response |Response Measure
+
+|Website visitors across tenant sites |Generate peak traffic surge (3× average) during major events or product launches |Production ingestion pipeline |Event ingestion service (JS SDK, Mobile SDK, API Gateway) |System buffers and processes events without backpressure or dropped messages |Sustains 5,083,681 write RPS (peak Year 5 projection) with <0.01% event loss rate
+|===
+
+==== S-1
+[options="header",cols="2,2,2,2,2,2"]
+|===
+|Source |Stimulus |Environment |Artifact |Response |Response Measure
+
+|Website visitors (growing user base) |Continuous event generation at increasing daily volumes |Production system with 10% YoY growth |Ingestion pipeline and storage layer |System scales horizontally to accommodate growth |Handles 100B events/day baseline (Year 1), scaling to 146B events/day by Year 5 without service degradation
+|===
+
+==== S-2
+[options="header",cols="2,2,2,2,2,2"]
+|===
+|Source |Stimulus |Environment |Artifact |Response |Response Measure
+
+|System operations (continuous data accumulation) |Forever retention policy requires cumulative storage of all historical events |Production storage infrastructure |Event database and archival storage |System provisions and manages tiered storage (hot/warm/cold) to accommodate growth |Stores 99 TB cumulative data by Year 5 with automated tiering: <3 months hot (SSD), 3-12 months warm (HDD), >12 months cold (object storage)
+|===
+
+==== A-1
+[options="header",cols="2,2,2,2,2,2"]
+|===
+|Source |Stimulus |Environment |Artifact |Response |Response Measure
+
+|Website visitor |Performs trackable action (page view, button click, form submission) |Production system under normal operation |Event ingestion and processing pipeline |System ingests, processes, aggregates, and makes event visible in analytics dashboard |End-to-end latency from event occurrence to dashboard visibility: 50-100 minutes (acceptable batch processing window)
+|===
+
+==== A-2
+[options="header",cols="2,2,2,2,2,2"]
+|===
+|Source |Stimulus |Environment |Artifact |Response |Response Measure
+
+|Infrastructure failures (node crashes, network partitions, deployment updates) |Service disruptions or degraded component availability |Production environment during business hours (9am-9pm local time across all regions) |Analytics Platform (all components) |System detects failures, performs automatic failover, maintains service availability |99.9% uptime SLA during business hours (≤43 minutes downtime/month), excluding planned maintenance windows
+|===
+
+==== D-1
+[options="header",cols="2,2,2,2,2,2"]
+|===
+|Source |Stimulus |Environment |Artifact |Response |Response Measure
+
+|Website visitors and system operations |Continuous event ingestion requiring permanent storage per website |Production ingestion and storage infrastructure |Event database with replication and backup policies |System persists all ingested events with replication and backup across availability zones |Zero data loss for successfully acknowledged events; forever retention with 99.999999999% durability (11 nines) via multi-AZ replication and backup to object storage
+|===
+
+==== M-1
+[options="header",cols="2,2,2,2,2,2"]
+|===
+|Source |Stimulus |Environment |Artifact |Response |Response Measure
+
+|Operations/SRE team |Monitors distributed system for performance degradation, bottlenecks, or anomalies |Production observability infrastructure |Monitoring stack (metrics, logs, traces, alerting) |System collects telemetry from all components, detects anomalies, and alerts on threshold violations |Bottleneck detection latency ≤2 minutes; metrics retention 90 days; distributed trace sampling rate ≥1% of requests; alert false positive rate <5%
+|===
+
+==== U-1
+[options="header",cols="2,2,2,2,2,2"]
+|===
+|Source |Stimulus |Environment |Artifact |Response |Response Measure
+
+|Client website/app owner (tenant) |Integrates analytics tracking into existing website or mobile application |Development/staging environment |JS SDK, Mobile SDK, and integration documentation |Developer follows documentation, adds SDK script tag or library dependency, configures tracking options |Integration time ≤30 minutes for basic setup (script tag + domain whitelist); zero server-side infrastructure changes required; SDK payload size <50 KB
+|===
+
+==== SE-1
+[options="header",cols="2,2,2,2,2,2"]
+|===
+|Source |Stimulus |Environment |Artifact |Response |Response Measure
+
+|Data subject (website visitor) or Privacy Officer |Exercises GDPR/CCPA rights (consent withdrawal, data access request, deletion request) |Production system with regulatory compliance requirements |Consent management service, data retention policies, audit logging |System honors consent preferences in real-time, processes deletion requests, maintains audit trail |Consent respected within 1 hour of update; deletion requests completed within 30 days; 100% of data access/modification operations logged with immutable audit trail retained for 7 years
+|===
 
