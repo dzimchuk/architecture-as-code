@@ -3,6 +3,69 @@ ifndef::imagesdir[:imagesdir: ../images]
 [[section-technical-risks]]
 == Risks and Technical Debts
 
-- _See https://riskstorming.com/[Risk Storming] for a visual and collaborative risk identification technique_.
+=== Technical Risk Register
+
+[options="header",cols="1,2,1,1,1,3,2"]
+|===
+| ID | Risk | Related QAs | Likelihood | Impact | Mitigations | Triggers / Monitors
+
+| RISK-INGEST-01 | Write throughput exceeds 1.16M-1.69M RPS average, peaks at 5M RPS (Mind-blowing tier) | P-2, S-1 | High | 🟥 High | Distributed message queue (Kafka/Pulsar), horizontal partitioning, multi-region ingestion, autoscaling consumers | Write RPS >80% capacity; Kafka lag >5 min; producer backpressure errors
+| RISK-INGEST-02 | Peak traffic bursts (3× multiplier) cause event loss or backpressure failures | P-2, D-1 | Medium | 🟥 High | Buffering with 5-10× headroom, DLQ for failed events, circuit breakers, rate limiting per tenant | Event loss rate >0.01%; DLQ depth >10k; producer timeout rate >1%
+| RISK-STORAGE-01 | Cumulative storage reaches 99 TB by Year 5; single DB cannot handle volume | S-2, D-1 | High | 🟨 Medium | Sharded/partitioned DB (Cassandra/ClickHouse), tiered storage (hot→warm→cold), automated archival to object storage | Storage utilization >70%; query latency degradation; hot storage >20 TB
+| RISK-STORAGE-02 | Forever retention drives unsustainable storage costs | S-2 | High | 🟨 Medium | Data lifecycle policies (<3mo hot SSD, 3-12mo warm HDD, >12mo cold object storage), compression (Zstd/LZ4), TTL for non-critical metrics | Storage cost growth >30% MoM; cold storage migration lag >7 days
+| RISK-QUERY-01 | Query latency exceeds 1.5s SLA during peak read load (900-1,318 RPS combined) | P-1, A-2 | Medium | 🟥 High | Pre-aggregations, materialized views, distributed caching (Redis cluster), read replicas, query result caching | P95 query latency >1.5s; cache miss rate >40%; read replica lag >30s
+| RISK-QUERY-02 | Complex multi-dimensional queries (geo, source, device, UTM) over 3-month periods degrade performance | P-1 | Medium | 🟨 Medium | Columnar storage (Parquet), OLAP query pushdown, query optimization, partition pruning, secondary indexes | Query timeout rate >5%; query execution time >10s; full table scan rate >20%
+| RISK-NETWORK-01 | Network bandwidth escalates to 1.40 GB/s (11.2 Gbps) by Year 5, approaching 40 Gbps threshold | S-1 | Medium | 🟨 Medium | Multi-region distribution, edge ingestion endpoints, CDN for read traffic, network capacity planning | Bandwidth utilization >70%; packet loss >0.1%; cross-AZ traffic cost spike
+| RISK-OPS-01 | Managing 1M+ RPS distributed system requires senior-level expertise | M-1 | High | 🟥 High | Hiring/training plan, SRE team formation, runbooks, chaos engineering, managed services (MSK, Kinesis), vendor support | Incident MTTR >1 hour; on-call burnout; repeated incidents of same root cause
+| RISK-OPS-02 | Monitoring complexity across distributed pipeline delays bottleneck detection | M-1, A-2 | Medium | 🟨 Medium | Unified observability (Prometheus, Grafana, Jaeger), distributed tracing (1%+ sampling), anomaly detection, SLO/SLA dashboards | Bottleneck detection time >5 min; alert false positive rate >10%; undetected degradation
+| RISK-FRESH-01 | Batch processing window (50-100 min) violated under peak load or pipeline failures | A-1 | Medium | 🟨 Medium | Stream processing for critical metrics, pipeline monitoring, backfill automation, graceful degradation | Processing lag >100 min; backlog size >2 hours of events; batch job failures
+| RISK-SCALE-01 | Autoscaling lag during traffic spikes causes temporary capacity shortfall | P-2, S-1 | Medium | 🟨 Medium | Predictive scaling based on historical patterns, pre-warming during known events, warm standby capacity (10-20% buffer) | Scale-out time >5 min; CPU/memory >90% during spike; rejected requests >0.1%
+| RISK-DATA-01 | Data loss during node failures or deployment updates | D-1, A-2 | Low | 🟥 High | Multi-AZ replication (RF=3), producer acknowledgments (acks=all), zero-downtime deployments, backup automation | Acknowledged event loss >0%; replica lag >5 min; backup failures
+| RISK-GDPR-01 | Deletion requests cannot complete within 30 days due to distributed data copies | SE-1 | Medium | 🟨 Medium | Data lineage tracking, centralized deletion workflow, tombstone markers, compliance audit trail, retention policies | Deletion request SLA miss rate >5%; audit trail gaps; data subject complaints
+|===
+
+=== Technical Debts
+
+==== Infrastructure & Operations
+- [ ] Load testing infrastructure for 5M RPS peak ingestion not yet established
+- [ ] Chaos engineering practices and fault injection framework missing
+- [ ] Disaster recovery runbooks incomplete (failover, lag recovery, data restoration)
+- [ ] Cost optimization analysis for multi-year storage growth not performed
+- [ ] Capacity planning automation and forecasting tools not implemented
+
+==== Architecture & Design
+- [ ] Technology selection for distributed database (Cassandra/ScyllaDB/ClickHouse) pending (ADR required)
+- [ ] Message queue technology decision (Kafka/Kinesis/Pulsar) pending (ADR required)
+- [ ] Caching layer design and cache invalidation strategy undefined
+- [ ] Multi-region ingestion architecture not designed
+- [ ] Data partitioning and sharding strategy requires detailed design
+
+==== Monitoring & Observability
+- [ ] End-to-end distributed tracing not implemented across ingestion pipeline
+- [ ] SLO/SLA monitoring dashboards and alerting rules not configured
+- [ ] Anomaly detection for write throughput and query latency not automated
+- [ ] Cost monitoring and attribution per tenant not available
+- [ ] Synthetic monitoring for critical user journeys (dashboard queries) missing
+
+==== Data Management
+- [ ] Data lifecycle policies (hot→warm→cold tiering) not automated
+- [ ] Backup and restore procedures for multi-TB datasets not tested
+- [ ] Data retention compliance framework (GDPR/CCPA) requires implementation
+- [ ] Data lineage and catalog for compliance audits incomplete
+- [ ] Archival and retrieval workflows for cold storage undefined
+
+==== Development & Testing
+- [ ] Performance regression testing in CI/CD pipeline not established
+- [ ] Load testing scenarios for realistic multi-dimensional queries missing
+- [ ] Tenant isolation and noisy neighbor prevention not validated
+- [ ] SDK performance overhead benchmarks (page load impact) not measured
+- [ ] Integration testing for SDK across browsers/devices incomplete
+
+==== Security & Compliance
+- [ ] Consent management API and consent propagation delays not designed
+- [ ] Data encryption at rest and in transit not fully implemented
+- [ ] Access control and RBAC for multi-tenant analytics not finalized
+- [ ] Audit logging retention and immutability guarantees not enforced
+- [ ] Security incident response plan for data breaches incomplete
 
 
