@@ -3,5 +3,102 @@ ifndef::imagesdir[:imagesdir: ../images]
 [[section-solution-strategy]]
 == Solution Strategy
 
+=== Overall Approach
 
+The Analytics Platform targets hyperscale web analytics — ingesting 100–146 billion events/day, storing ~99 TB cumulatively by Year 5 with forever retention, and serving interactive dashboards at ≤1.5 s P95 latency. The architecture follows five guiding principles derived from back-of-the-envelope capacity planning (see ADR-0002, ADR-0003):
 
+* **Write-path dominance drives architecture shape.** With average write throughput at 1.16–1.69 M RPS and peaks at 5 M RPS, every technology choice must first prove horizontal write scalability before being considered for other qualities.
+* **Separation of read and write paths.** Dedicated read replicas and pre-aggregated materialized views isolate query workloads from the ingestion pipeline, preventing mutual degradation.
+* **Tiered storage for cost-sustainable forever retention.** Hot/warm/cold tiers with automated lifecycle policies keep cumulative storage costs viable while preserving query performance over recent data.
+* **Operational simplicity over feature richness.** When multiple technologies can satisfy a requirement, the option with the smaller operational surface is preferred (e.g., ClickHouse Kafka Engine over Spark/Flink, ClickHouse native tiering over custom ETL).
+* **Privacy by design.** Consent gating, data minimization, and event-driven compliance are built into the architecture from the SDK through to cold-tier storage, not retrofitted.
+
+All architectural ADRs (ADR-0004 through ADR-0014) are currently in **Proposed** status. Formal acceptance is pending review.
+
+=== Strategic Decisions
+
+==== Capacity Planning and Risk Assessment
+
+Back-of-the-envelope calculations establish 5-year projections across write RPS, storage, network bandwidth, and read RPS. These projections classify write throughput in the _mind-blowing_ tier (>1 M RPS) and storage in the _something_ tier (10–100 TB), providing a quantitative basis for every subsequent technology selection (see ADR-0002, ADR-0003).
+
+* Explicit parameter baselines make sizing assumptions transparent and auditable.
+* Risk register (§11) maps calculated volumes to specific failure modes (RISK-INGEST-01 through RISK-GDPR-01).
+* Quality attribute thresholds (P-1 through SE-1) are used as acceptance criteria throughout all ADRs.
+
+==== Event Ingestion and Streaming
+
+* **Message queue:** Apache Kafka in KRaft mode, configured with `acks=all`, RF=3, and idempotent producers to guarantee zero data loss for acknowledged events. Managed Kafka (MSK / Confluent Cloud) is reserved as an operational fallback (see ADR-0004). Addresses P-2, S-1, D-1.
+* **Pipeline topology:** Two-tier ingestion — lightweight client SDKs send events to regional Edge Collectors, which validate, batch, and produce to a central Kafka cluster. Collectors include a local write-ahead log for burst absorption and circuit breakers for backpressure management (see ADR-0005). Addresses P-2, S-1, D-1, A-2.
+* **Partitioning:** 1,024 Kafka partitions keyed by `tenant_id` provide linear consumer parallelism. Predictive autoscaling with 15% warm standby headroom mitigates scaling lag during traffic spikes (see ADR-0005).
+
+==== Persistent Storage and Data Lifecycle
+
+* **Event store:** ClickHouse with `ReplicatedMergeTree` engine and ClickHouse Keeper. Monthly partitions (`toYYYYMM`), order key `(tenant_id, event_date, event_type)`, sharding via `cityHash64(tenant_id)`. Columnar compression (LZ4/ZSTD) reduces 99 TB logical data to ~5–10 TB physical (see ADR-0006). Addresses P-1, P-2, S-1, S-2, D-1, A-2.
+* **Tiered storage:** ClickHouse native volume policies with declarative TTL rules — Hot (NVMe SSD, <3 months, LZ4), Warm (HDD, 3–12 months, ZSTD-3), Cold (S3, >12 months, ZSTD-7). Single-table abstraction eliminates the need for a federation layer (see ADR-0007). Addresses S-2, D-1, P-1, SE-1.
+* **Backup and recovery:** Daily incremental backups to S3 for hot/warm tiers; cold tier already on S3 with cross-region replication. Kafka's 72-hour retention provides a replay buffer for recent-event recovery (see ADR-0005, ADR-0007).
+
+==== Query Performance and Read Path
+
+* **Pre-aggregation:** Four ClickHouse materialized views (`AggregatingMergeTree`) — hourly page views, daily segmentation, daily UTM, hourly unique visitors — shift aggregation to write-time, reducing per-query scan volume by 100–1,000× (see ADR-0008). Addresses P-1.
+* **Result caching:** Redis Cluster (6 nodes, cache-aside, 10-minute default TTL) absorbs repeated identical queries at <10 ms. Cache failure degrades latency, not availability (see ADR-0008). Addresses P-1, A-2.
+* **Read/write separation:** Dedicated ClickHouse read replicas serve all analytical queries via a stateless Query API. Per-tenant rate limiting (50 queries/min), concurrency caps (10 concurrent), query complexity scoring, and two-tier priority queues protect cluster stability and ensure tenant fairness (see ADR-0009). Addresses P-1, A-2.
+
+==== Event Processing
+
+* **Hybrid batch-primary model:** ClickHouse Kafka Engine provides continuous ingestion from Kafka (Layer 1). A conditional Backfill Consumer activates when consumer lag exceeds 30 minutes, draining backlogs before the 100-minute freshness SLA is breached (Layer 2). This eliminates the need for a separate Spark or Flink cluster (see ADR-0010). Addresses A-1, P-2, A-2.
+* **Deduplication:** At-least-once delivery from Kafka Engine is handled via `ReplacingMergeTree` with `(tenant_id, event_id)` as dedup key. Materialized views using `*State` combinators tolerate interim duplicates (see ADR-0010).
+
+==== High Availability and Deployment
+
+* **Multi-AZ active-active:** All components deployed across 3 Availability Zones. Kafka (9 brokers, 3 KRaft controllers), ClickHouse (write replicas RF=2/shard + read replicas in all AZs), Redis Cluster (1 master + 1 replica per AZ), and stateless services (Query API, Edge Collectors, Backfill Consumer) on Kubernetes (see ADR-0011). Addresses A-2, D-1, S-1.
+* **Failover:** Combined RTO <60 seconds for any single-component failure. Network bandwidth distributed to ~3.7 Gbps per AZ (Year 5), maintaining >90% headroom against the 40 Gbps per-AZ threshold (see ADR-0011).
+* **Zero-downtime deployments:** Rolling updates for stateless services, canary-per-AZ for Kafka and ClickHouse, blue-green for ClickHouse DDL changes (see ADR-0011).
+
+==== Observability and Operations
+
+* **Telemetry stack:** OpenTelemetry Collector (per-node DaemonSet) feeds Grafana Mimir (metrics, 90-day retention), Grafana Tempo (traces, ≥1% sampling + tail-based for errors), and Grafana Loki (logs). Unified Grafana dashboards and SLO-based burn-rate alerting across 4 severity tiers (see ADR-0012). Addresses M-1, A-2.
+* **SLOs:** Dashboard query latency P95 ≤1.5 s (99.5%), ingestion success rate (99.99%), platform uptime (99.9%), data freshness <100 min (99.0%), cache hit rate (≥60%). Burn-rate alerts prevent false positives (<5% target) while catching sustained degradations within 2 minutes (see ADR-0012).
+
+==== Security, Compliance, and Client Integration
+
+* **GDPR/CCPA compliance:** Event-driven architecture — consent updates and deletion requests propagated via Kafka topics. A central Compliance Orchestrator tracks the deletion lifecycle across all 7+ data locations (Kafka, ClickHouse hot/warm/cold, Redis, MVs, Edge Collector WAL). PostgreSQL-backed consent store provides ACID consistency. Immutable audit log (ClickHouse + S3 Object Lock) retained for 7 years (see ADR-0013). Addresses SE-1.
+* **Client SDK:** Lightweight core (<15 KB gzip) with plugin architecture. Consent gate is the first checkpoint — no events emitted before validation. Script-tag integration in <5 minutes with zero server-side changes. `sendBeacon` transport with localStorage offline queue for at-least-once delivery. Privacy by design: no PII collection, first-party cookies, server-side IP resolution (see ADR-0014). Addresses U-1, SE-1.
+
+=== Key Trade-offs
+
+[options="header",cols="2,3,3"]
+|===
+| Area | What was prioritized | What was accepted as risk
+
+| Write throughput
+| Horizontal scalability via Kafka (KRaft) + ClickHouse partitioning; proven at >1 M RPS (P-2, S-1)
+| Significant operational complexity; dedicated Kafka and ClickHouse SRE expertise required (RISK-OPS-01). Partition count planning is critical — under-partitioning limits parallelism.
+
+| Query latency
+| Pre-aggregated MVs + Redis caching + dedicated read replicas achieve <500 ms for >90% of dashboard queries (P-1)
+| High-cardinality ad-hoc queries bypass MVs and hit raw tables — these remain at risk of exceeding 1.5 s P95. Redis Cluster adds infrastructure (6+ nodes).
+
+| Storage cost
+| ClickHouse columnar compression (10–20×) + S3 cold tier (~$0.023/GB/month) keeps forever retention sustainable (S-2)
+| Cold-tier queries are significantly slower (seconds to minutes). Large DELETE mutations on S3 parts for GDPR compliance take hours. S3 egress costs for frequent cold-tier access are unpredictable.
+
+| Data freshness
+| Batch-primary processing with 2–10 min normal freshness — far exceeds 50–100 min SLA (A-1)
+| ClickHouse Kafka Engine offset management is less flexible than dedicated consumers. Backfill consumer activation logic requires robust monitoring — late activation risks SLA breach.
+
+| Availability
+| Active-active 3-AZ deployment with instant failover; combined RTO <60 s (A-2)
+| ~30% cross-AZ network overhead and inter-AZ data transfer costs. Full-region DR (multi-region) is explicitly out of scope. Redis async replication has a <1 s data-loss window on master failure.
+
+| Privacy compliance
+| Event-driven deletion orchestration with 14-day internal target (vs. 30-day SLA); consent gating at SDK level (SE-1)
+| HyperLogLog-based unique-visitor MVs cannot remove individuals — periodic re-aggregation required with interim statistical overcount. Compliance orchestrator is a critical HA dependency. **TODO:** No ADR yet addresses encryption at rest and in transit.
+
+| Operational simplicity
+| ClickHouse Kafka Engine replaces Spark/Flink; native tiered storage replaces custom ETL; OpenTelemetry avoids vendor lock-in
+| At-least-once semantics (not exactly-once) accepted for analytics. ClickHouse Keeper ensemble (3 nodes) is a single critical dependency for write quorum. SLO thresholds require ~30 days of production tuning.
+
+| Client integration
+| <15 KB core SDK with script-tag setup in <5 min; zero server-side changes (U-1)
+| First-party cookie-based visitor ID does not persist across browsers/devices. CMP callback API requires tenant-side implementation. Mobile SDKs require separate implementation effort.
+|===
