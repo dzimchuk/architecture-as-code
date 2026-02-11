@@ -103,3 +103,86 @@ ifndef::imagesdir[:imagesdir: ../images]
 |Data subject (website visitor) or Privacy Officer |Exercises GDPR/CCPA rights (consent withdrawal, data access request, deletion request) |Production system with regulatory compliance requirements |Consent management service, data retention policies, audit logging |System honors consent preferences in real-time, processes deletion requests, maintains audit trail |Consent respected within 1 hour of update; deletion requests completed within 30 days; 100% of data access/modification operations logged with immutable audit trail retained for 7 years
 |===
 
+
+=== Traceability of Quality Requirements to Architectural Decisions
+
+Cross-references: §9 — Architecture Decision Records (`adrs/*.md`); §11 — Technical Risks (`11_technical_risks.adoc`).
+
+==== Summary
+
+* High-priority QAs total: **7** (P-1, P-2, S-1, S-2, A-2, D-1, SE-1)
+* Covered by Accepted ADR: **0**
+* Gaps (no ADR at all): **0**
+* Weak coverage (Proposed ADRs only): **10** (all QAs)
+
+NOTE: ADR-0001 (Record Architecture Decisions) is the only Accepted ADR; it is a process decision and does not address any QA. ADRs 0002–0014 are all in **Proposed** status. No ADRs are Superseded or Deprecated.
+
+==== Coverage Matrix
+
+[options="header",cols="1,1,2,3"]
+|===
+| QA ID | Priority | Covered by (Accepted ADRs) | Partially covered (Proposed ADRs)
+
+| P-1   | High     | —                          | ADR-0006, ADR-0007, ADR-0008, ADR-0009
+| P-2   | High     | —                          | ADR-0004, ADR-0005, ADR-0006, ADR-0010
+| S-1   | High     | —                          | ADR-0004, ADR-0005, ADR-0006, ADR-0011
+| S-2   | High     | —                          | ADR-0006, ADR-0007
+| A-2   | High     | —                          | ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012
+| D-1   | High     | —                          | ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0011
+| SE-1  | High     | —                          | ADR-0007, ADR-0013, ADR-0014
+| A-1   | Medium   | —                          | ADR-0010
+| M-1   | Medium   | —                          | ADR-0012
+| U-1   | Medium   | —                          | ADR-0014
+|===
+
+==== Gaps & Weak Coverage
+
+All 10 QAs lack Accepted ADR coverage. Every QA is classified as **Weak** because all addressing ADRs remain in Proposed status.
+
+* **Weak:** P-1 (High) — only Proposed: ADR-0006, ADR-0007, ADR-0008, ADR-0009
+* **Weak:** P-2 (High) — only Proposed: ADR-0004, ADR-0005, ADR-0006, ADR-0010
+* **Weak:** S-1 (High) — only Proposed: ADR-0004, ADR-0005, ADR-0006, ADR-0011
+* **Weak:** S-2 (High) — only Proposed: ADR-0006, ADR-0007
+* **Weak:** A-2 (High) — only Proposed: ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012
+* **Weak:** D-1 (High) — only Proposed: ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0011
+* **Weak:** SE-1 (High) — only Proposed: ADR-0007, ADR-0013, ADR-0014
+* **Weak:** A-1 (Medium) — only Proposed: ADR-0010
+* **Weak:** M-1 (Medium) — only Proposed: ADR-0012
+* **Weak:** U-1 (Medium) — only Proposed: ADR-0014
+
+==== Conflicts / Duplicates
+
+* **No conflicts detected.** All ADRs addressing the same QA target complementary architectural layers (e.g., ADR-0008 caching + ADR-0009 read replicas for P-1; ADR-0004 Kafka + ADR-0005 pipeline for P-2). No incompatible trade-offs identified.
+* **No harmful duplicates detected.** QAs addressed by multiple ADRs (e.g., A-2 by 8 ADRs, D-1 by 5 ADRs) reflect layered defense across distinct components (Kafka, ClickHouse, Redis, Edge Collectors, HA deployment). Scopes are complementary, not overlapping.
+
+==== Risk Alignment (High-priority QAs)
+
+[options="header",cols="1,2,2,2"]
+|===
+| QA ID | Related Risk IDs | Mitigation present? | Note
+
+| P-1   | RISK-QUERY-01, RISK-QUERY-02                       | Yes (Proposed)  | ADR-0008 (MVs, caching), ADR-0009 (read replicas, query governance)
+| P-2   | RISK-INGEST-01, RISK-INGEST-02, RISK-SCALE-01      | Yes (Proposed)  | ADR-0004 (Kafka), ADR-0005 (pipeline, DLQ, backpressure)
+| S-1   | RISK-INGEST-01, RISK-NETWORK-01, RISK-SCALE-01     | Yes (Proposed)  | ADR-0004, ADR-0005, ADR-0011 (multi-AZ bandwidth distribution)
+| S-2   | RISK-STORAGE-01, RISK-STORAGE-02                    | Yes (Proposed)  | ADR-0006 (ClickHouse), ADR-0007 (tiered storage, compression)
+| A-2   | RISK-QUERY-01, RISK-OPS-02, RISK-DATA-01            | Yes (Proposed)  | ADR-0008, ADR-0009, ADR-0011, ADR-0012
+| D-1   | RISK-INGEST-02, RISK-DATA-01                        | Yes (Proposed)  | ADR-0004 (acks=all), ADR-0005 (WAL), ADR-0006 (RF=2), ADR-0011 (multi-AZ)
+| SE-1  | RISK-GDPR-01                                        | Yes (Proposed)  | ADR-0007 (deletion workflow), ADR-0013 (compliance orchestrator), ADR-0014 (consent-aware SDK)
+|===
+
+==== Recommended Actions
+
+1. **Advance ADR-0004 through ADR-0014 from Proposed to Accepted** — all 7 High-priority QAs currently have zero Accepted coverage; formal review and acceptance is the highest-priority action.
+2. **Prioritize acceptance of Iteration 1–2 ADRs first** (ADR-0004, ADR-0005, ADR-0006, ADR-0007) — these cover the foundational ingestion and storage architecture addressing P-2, S-1, S-2, and D-1.
+3. **Create ADR for encryption at rest and in transit** — SE-1 covers consent, deletion, and audit but no ADR addresses data encryption (noted as follow-up in ADR-0013 consequences). **TODO:** New ADR required.
+4. **Create ADR for multi-region disaster recovery** — A-2 (99.9% uptime) currently relies on single-region multi-AZ (ADR-0011); full-region failure is explicitly out of scope. Evaluate whether business requirements necessitate cross-region DR. **TODO:** New ADR required if multi-region is needed.
+5. **Create ADR for tenant isolation and noisy-neighbor prevention** — noted as technical debt in §11; no dedicated ADR exists. ADR-0009 includes per-tenant rate limits but a comprehensive tenant isolation strategy is missing. **TODO:** New ADR or extend ADR-0009.
+6. **Formalize ADR-0002 and ADR-0003 status** — these are foundational estimation ADRs; consider accepting them as baseline assumptions or superseding them if estimates have been revised.
+
+==== Notes
+
+* No Superseded or Deprecated ADRs exist; all ADRs in the register are either Accepted (ADR-0001 only) or Proposed (ADR-0002 through ADR-0014).
+* ADR-0002 and ADR-0003 are foundational parameter estimation and sizing ADRs. They reference QARs (QAR-1 through QAR-4) but do not make design decisions. They are excluded from the coverage matrix.
+* Total QAs: 10 (7 High, 3 Medium). Since the count is ≤20, no aggregation of Medium/Low rows was applied.
+* Tables use QA IDs and ADR IDs only; detailed rationale is in the respective ADR documents.
+
